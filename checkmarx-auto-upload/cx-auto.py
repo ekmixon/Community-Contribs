@@ -21,10 +21,16 @@ r_data = {'username':'CHECKMARX USER',
           }
 
 # gets CX auth header
-r = requests.post(cx_url + '/cxrestapi/auth/identity/connect/token', r_data, verify=False,)
+r = requests.post(
+    f'{cx_url}/cxrestapi/auth/identity/connect/token', r_data, verify=False
+)
+
 access_token = json.loads(r.text)['access_token']
-headers = {"Authorization": "Bearer %s" % access_token, "Accept":
-    "application/json"}
+headers = {
+    "Authorization": f"Bearer {access_token}",
+    "Accept": "application/json",
+}
+
 
 # instantiate the DefectDojo api wrapper
 dd = defectdojo.DefectDojoAPI(host, api_key, user, debug=False, verify_ssl=False)
@@ -35,7 +41,7 @@ json_prods = json.loads(dd.list_products().data_json())
 # loops until product pagination is less than 20 python does not have do/while
 # so while(true) is neccesary
 
-while(True):
+while True:
     # loops through first page of products
     for product in json_prods['objects']:
         # gets product id
@@ -59,7 +65,7 @@ while(True):
             json_tools = json.loads(dd_tools.data_json())
             #getting neccesary information to construct CX urls
             proj_id = json_tools['objects'][0]['tool_project_id']
-            r_url = cx_url + '/cxrestapi/sast/scans?last=1&projectId='+ str(proj_id)
+            r_url = f'{cx_url}/cxrestapi/sast/scans?last=1&projectId={str(proj_id)}'
             r_get_recent_scan = requests.get(r_url,
                 headers=headers, verify=False)
             recent_scan_id = json.loads(r_get_recent_scan.text)[0]['id']
@@ -69,21 +75,24 @@ while(True):
             }
             #creates CX report
             r_create_report = requests.post(
-                cx_url + '/cxrestapi/reports/sastScan',
-                headers=headers, verify=False, data=data)
+                f'{cx_url}/cxrestapi/reports/sastScan',
+                headers=headers,
+                verify=False,
+                data=data,
+            )
+
             report_id = json.loads(r_create_report.text)['reportId']
-            report_url = cx_url + '/cxrestapi/reports/sastScan/' + str(report_id)
+            report_url = f'{cx_url}/cxrestapi/reports/sastScan/{str(report_id)}'
             report_status = 'Not Started'
             #waits for the report to be ready
-            while(report_status != 'Created'):
-                status_url = cx_url + '/cxrestapi/reports/sastScan/'+ str(report_id) + '/status'
+            while (report_status != 'Created'):
+                status_url = f'{cx_url}/cxrestapi/reports/sastScan/{str(report_id)}/status'
                 report_status_request = requests.get(status_url, headers=headers, verify=False)
                 report_status = json.loads(report_status_request.text)['status']['value']
             #gets the CX report
             get_report = requests.get(report_url, headers=headers, verify=False)
-            scan_file =  open('report.xml', 'w')
-            scan_file.write(get_report.text)
-            scan_file.close()
+            with open('report.xml', 'w') as scan_file:
+                scan_file.write(get_report.text)
             #checks to decide if we should upload or reupload
             if json.loads(c_test)['meta']['total_count'] == 0:
                 dd.upload_scan(engagement_id=c_engagement['id'], scan_type='Checkmarx', file='report.xml', active=True, scan_date='01/01/2019', minimum_severity="High")
